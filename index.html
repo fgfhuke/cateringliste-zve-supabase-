@@ -872,6 +872,7 @@ function lizenzInputFormatieren(input) {
 const LS_NS = "catering_ZvE_";
 let PROJEKT_KUERZEL = "ZvE";
 let SESSION_PW = localStorage.getItem(LS_NS + "pw") || "";
+let _userId = null;
 let allePersonen = [], anwesendHeute = new Set(), exportDaten = [], autosaveTimer = null;
 let sortierung = "nachname", personenMitTeilnahme = new Set();
 
@@ -948,7 +949,7 @@ async function sbGetPersonen() {
 
 async function sbAddPerson({name, abteilung="", rolle=""}) {
   const id = "P" + Date.now();
-  const { error } = await _sb.from("personen").insert({id, name, abteilung});
+  const { error } = await _sb.from("personen").insert({id, name, abteilung, user_id: _userId});
   if(error) return {ok:false, error:error.message};
   return {ok:true, id};
 }
@@ -981,7 +982,7 @@ async function sbGetTeilnahme({datum}) {
 async function sbTogglePerson({datum, pid, an, name, abteilung=""}) {
   if(an) {
     const { error } = await _sb.from("teilnahme")
-      .upsert({datum, person_id:pid, name, abteilung}, {onConflict:"datum,person_id"});
+      .upsert({datum, person_id:pid, name, abteilung, user_id:_userId}, {onConflict:"datum,person_id,user_id"});
     if(error) return {ok:false, error:error.message};
   } else {
     const { error } = await _sb.from("teilnahme").delete().eq("datum", datum).eq("person_id", pid);
@@ -992,7 +993,7 @@ async function sbTogglePerson({datum, pid, an, name, abteilung=""}) {
 
 async function sbSetZaehler({datum, pid, name, abteilung, wert}) {
   const { error } = await _sb.from("teilnahme")
-    .upsert({datum, person_id:pid, name, abteilung, anzahl:wert}, {onConflict:"datum,person_id"});
+    .upsert({datum, person_id:pid, name, abteilung, anzahl:wert, user_id:_userId}, {onConflict:"datum,person_id,user_id"});
   if(error) return {ok:false, error:error.message};
   return {ok:true};
 }
@@ -1004,15 +1005,15 @@ async function sbSetTeilnahme({datum, eintraege, komparsen, gaeste}) {
     .not("person_id", "eq", "GAEST01");
   if(e1) return {ok:false, error:e1.message};
   if(eintraege && eintraege.length > 0) {
-    const rows = eintraege.map(e => ({datum, person_id:e.id, name:e.name, abteilung:e.abteilung||""}));
+    const rows = eintraege.map(e => ({datum, person_id:e.id, name:e.name, abteilung:e.abteilung||"", user_id:_userId}));
     const { error: e2 } = await _sb.from("teilnahme").insert(rows);
     if(e2) return {ok:false, error:e2.message};
   }
   const { error: e3 } = await _sb.from("teilnahme")
-    .upsert({datum, person_id:"KOMP01", name:"Komparsen", abteilung:"10 Komparsen", anzahl:komparsen||0}, {onConflict:"datum,person_id"});
+    .upsert({datum, person_id:"KOMP01", name:"Komparsen", abteilung:"10 Komparsen", anzahl:komparsen||0, user_id:_userId}, {onConflict:"datum,person_id,user_id"});
   if(e3) return {ok:false, error:e3.message};
   const { error: e4 } = await _sb.from("teilnahme")
-    .upsert({datum, person_id:"GAEST01", name:"Gäste", abteilung:"11 Gäste", anzahl:gaeste||0}, {onConflict:"datum,person_id"});
+    .upsert({datum, person_id:"GAEST01", name:"Gäste", abteilung:"11 Gäste", anzahl:gaeste||0, user_id:_userId}, {onConflict:"datum,person_id,user_id"});
   if(e4) return {ok:false, error:e4.message};
   return {ok:true};
 }
@@ -1097,6 +1098,7 @@ document.getElementById("pw-input").addEventListener("keydown",e=>{if(e.key==="E
 (async function() {
   const { data: { session } } = await _sb.auth.getSession();
   if(session) {
+    _userId = session.user.id;
     const personen = JSON.parse(localStorage.getItem(LS_NS + "personen")||"[]");
     const teilnahmeIds = JSON.parse(localStorage.getItem(LS_NS + "teilnahme_ids")||"[]");
     SESSION_PW = localStorage.getItem(LS_NS + "pw") || "";
@@ -1165,13 +1167,14 @@ async function login() {
   }
 
   try {
-    const { error: authErr } = await _sb.auth.signInWithPassword({email: LOGIN_EMAIL, password: pw});
+    const { data: authData, error: authErr } = await _sb.auth.signInWithPassword({email: LOGIN_EMAIL, password: pw});
     if(authErr) {
       document.getElementById("login-error").textContent="Falsches Passwort";
       btn.disabled=false; btn.textContent="Anmelden";
       return;
     }
     SESSION_PW = pw;
+    _userId = authData?.session?.user?.id || null;
     const res = await api("getPersonen");
     if(res.ok) {
       document.getElementById("login-projekt").textContent = PROJEKT_KUERZEL ? "· " + PROJEKT_KUERZEL : "";
