@@ -153,6 +153,7 @@ textarea{resize:vertical;min-height:120px;font-family:var(--mono);font-size:15px
 .offline-banner.show{display:block}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--surface);border-radius:24px;padding:12px 24px;font-size:15px;font-weight:500;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;white-space:nowrap;z-index:999;box-shadow:0 4px 16px rgba(0,0,0,.18)}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{background:var(--red);font-weight:700}
 /* Gespeichert-Bestätigung */
 .saved-flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.8);background:var(--green);color:#fff;border-radius:16px;padding:20px 40px;font-size:24px;font-weight:700;opacity:0;pointer-events:none;z-index:998;transition:opacity .15s,transform .15s;box-shadow:0 4px 24px rgba(26,107,60,.4)}
 .saved-flash.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
@@ -916,6 +917,11 @@ function toast(msg, ms=2200) {
   el.textContent=msg; el.classList.add("show");
   setTimeout(()=>el.classList.remove("show"),ms);
 }
+function toastErr(msg, ms=3000) {
+  const el=document.getElementById("toast");
+  el.textContent=msg; el.classList.add("show","err");
+  setTimeout(()=>el.classList.remove("show","err"),ms);
+}
 
 async function api(action, extra={}) {
   switch(action) {
@@ -1361,7 +1367,7 @@ async function speichereZaehler(datum, pid, name, abt, wert) {
   try {
     const res = await api("setZaehler", {datum, pid, name, abteilung:abt, wert});
     if(res.ok) { setAutosaveStatus("saved"); }
-    else { setAutosaveStatus("err"); toast("Fehler: " + (res.error||"unbekannt")); }
+    else { setAutosaveStatus("err"); toastErr("Fehler: " + (res.error||"unbekannt")); }
   } catch(e) {
     istOffline = true;
     offlineBannerAktualisieren();
@@ -1831,6 +1837,7 @@ function setAutosaveStatus(s) {
   const text=document.getElementById("autosave-text");
   if(!dot||!text) return;
   dot.className="autosave-dot";
+  text.style.color=""; text.style.fontWeight="";
   const uhr=new Date().toLocaleTimeString("de-DE",{hour:"2-digit",minute:"2-digit"});
 
   const touchStatus=document.getElementById("touch-save-status");
@@ -1838,7 +1845,7 @@ function setAutosaveStatus(s) {
     if(s==="laden")   { touchStatus.innerHTML='<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#f0a500;animation:pulse .8s ease-in-out infinite;margin-right:5px;vertical-align:middle"></span><span style="font-family:var(--mono);font-size:12px;color:var(--muted)">Laden…</span>'; }
     if(s==="saving"||s==="pending") { touchStatus.innerHTML='<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#f0a500;animation:pulse .8s ease-in-out infinite;margin-right:5px;vertical-align:middle"></span><span style="font-family:var(--mono);font-size:12px;color:var(--muted)">speichere…</span>'; }
     else if(s==="saved") { touchStatus.innerHTML='<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--green);margin-right:5px;vertical-align:middle"></span><span style="font-family:var(--mono);font-size:12px;color:var(--muted)">'+uhr+'</span>'; }
-    else if(s==="err")   { touchStatus.innerHTML='<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red);margin-right:5px;vertical-align:middle"></span><span style="font-family:var(--mono);font-size:12px;color:var(--red)">Fehler</span>'; }
+    else if(s==="err")   { touchStatus.innerHTML='<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--red);margin-right:5px;vertical-align:middle"></span><span style="font-family:var(--mono);font-size:12px;color:var(--red);font-weight:700">Fehler beim Speichern</span>'; }
     else if(s==="offline") { touchStatus.innerHTML='<span style="font-family:var(--mono);font-size:12px;color:var(--muted)">offline</span>'; }
     else { touchStatus.innerHTML=""; }
   }
@@ -1847,7 +1854,7 @@ function setAutosaveStatus(s) {
   if(s==="pending") {text.textContent="Nicht gespeichert…";}
   if(s==="saving")  {text.textContent="Speichere…";dot.classList.add("saving");}
   if(s==="saved")   {text.textContent=`Gespeichert ${uhr}`;dot.classList.add("saved");}
-  if(s==="err")     {text.textContent="Fehler beim Speichern";dot.classList.add("err");}
+  if(s==="err")     {text.textContent="Fehler beim Speichern";text.style.color="var(--red)";text.style.fontWeight="700";dot.classList.add("err");}
 }
 
 function renderPersonenverwaltung() {
@@ -3068,7 +3075,7 @@ async function matrixKompSpeichern(input, datum) {
   const sumCell=document.getElementById('ms-KOMP01');
   if(sumCell) sumCell.textContent=kompSumme||'';
   try { await api('setZaehler',{datum,pid:'KOMP01',name:'Komparsen',abteilung:'10 Komparsen',wert}); }
-  catch(e) { toast('Fehler beim Speichern'); }
+  catch(e) { toastErr('Fehler beim Speichern'); }
 }
 
 async function matrixToggleZelle(pid, datum) {
@@ -3089,7 +3096,7 @@ async function matrixToggleZelle(pid, datum) {
   } catch(e) {
     if(jetzt) matrixAnwesend[pid].delete(datum); else matrixAnwesend[pid].add(datum);
     matrixRendern();
-    toast("Fehler beim Speichern");
+    toastErr("Fehler beim Speichern");
   }
 }
 </script>
